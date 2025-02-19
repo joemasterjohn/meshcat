@@ -12,128 +12,176 @@
 
     <script src="../dist/main.min.js"></script>
     <script>
-        var viewer = new MeshCat.Viewer(document.getElementById("meshcat-pane"));
 
-        // Set InstancedMesh object -- a grid of 3x3x3 BoxGeometries
-        viewer.handle_command({
-            type: "set_object",
-            path: "/meshcat/instanced_cubes",
-            object: {
-                metadata: { version: 4.5, type: "Object" },
-                geometries: [
-                    {
-                        uuid: "c2afd88b-ff9e-4408-9b94-b94e2079e2c8",
-                        type: "BoxGeometry",
-                        width: 0.2,
-                        height: 0.2,
-                        depth: 0.2
-                    }
-                ],
-                materials: [
-                    {
-                        uuid: "a63e3e66-c87a-4826-adee-2cf0fc04bf70", 
-                        type: "MeshPhongMaterial",
-                        color: 0xffffff,  // white
-                        side: 2,
-                        transparent: true,
-                        opacity: 0.5
-                    }
-                ],
-                object: {
-                    uuid: "d8497b0e-2529-4c5a-a477-00fc2c815349",
-                    type: "InstancedMesh",
-                    geometry: "c2afd88b-ff9e-4408-9b94-b94e2079e2c8",
-                    material: "a63e3e66-c87a-4826-adee-2cf0fc04bf70",
-                    instanceMatrix: {
-                        type: "Float32Array",
-                        itemSize: 16,
-                        array: [
-                            // Each line is a 4x4 transform matrix of a cube
-                            // The 4x4 matrices are flattened in column-major order
+    var viewer = new MeshCat.Viewer(document.getElementById("meshcat-pane"));
 
-                            // z = 0 layer
-                            1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1,
-                            1,0,0,0, 0,1,0,0, 0,0,1,0, 0.3,0,0,1,
-                            1,0,0,0, 0,1,0,0, 0,0,1,0, 0.6,0,0,1,
-                            1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0.3,0,1,
-                            1,0,0,0, 0,1,0,0, 0,0,1,0, 0.3,0.3,0,1,
-                            1,0,0,0, 0,1,0,0, 0,0,1,0, 0.6,0.3,0,1,
-                            1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0.6,0,1,
-                            1,0,0,0, 0,1,0,0, 0,0,1,0, 0.3,0.6,0,1,
-                            1,0,0,0, 0,1,0,0, 0,0,1,0, 0.6,0.6,0,1,
+    // Size of each cube instance.
+    const cube_size = 0.2;
+    // Default offset between the center of two adjacent cube instances.
+    const default_offset = 0.3;
+    // Size of a single dimension of the grid.
+    const grid_dim = 3;
+    // Total size of the grid.
+    const grid_size = grid_dim * grid_dim * grid_dim;
+    // Size of a 2D slide of the grid.
+    const slice_size = grid_dim * grid_dim;
 
-                            // z = 0.3 layer
-                            1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0.3,1,
-                            1,0,0,0, 0,1,0,0, 0,0,1,0, 0.3,0,0.3,1,
-                            1,0,0,0, 0,1,0,0, 0,0,1,0, 0.6,0,0.3,1,
-                            1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0.3,0.3,1,
-                            1,0,0,0, 0,1,0,0, 0,0,1,0, 0.3,0.3,0.3,1,
-                            1,0,0,0, 0,1,0,0, 0,0,1,0, 0.6,0.3,0.3,1,
-                            1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0.6,0.3,1,
-                            1,0,0,0, 0,1,0,0, 0,0,1,0, 0.3,0.6,0.3,1,
-                            1,0,0,0, 0,1,0,0, 0,0,1,0, 0.6,0.6,0.3,1,
+    // Controls the color state of the grid.
+    var color_on = false;
 
-                            // z = 0.6 layer
-                            1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0.6,1,
-                            1,0,0,0, 0,1,0,0, 0,0,1,0, 0.3,0,0.6,1,
-                            1,0,0,0, 0,1,0,0, 0,0,1,0, 0.6,0,0.6,1,
-                            1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0.3,0.6,1,
-                            1,0,0,0, 0,1,0,0, 0,0,1,0, 0.3,0.3,0.6,1,
-                            1,0,0,0, 0,1,0,0, 0,0,1,0, 0.6,0.3,0.6,1,
-                            1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0.6,0.6,1,
-                            1,0,0,0, 0,1,0,0, 0,0,1,0, 0.3,0.6,0.6,1,
-                            1,0,0,0, 0,1,0,0, 0,0,1,0, 0.6,0.6,0.6,1
-                        ]
-                    },
-                    instanceColor: {
-                        type: "Float32Array",
-                        itemSize: 3,
-                        array: new Float32Array(27 * 3).fill(1)  // 27 instances * 3 components (RGB)
-                    },
-                    count: 27
-                }
+    // Construct an InstancedMesh with `grid_size` instances of a cube
+    // geometry.
+    var geo = new MeshCat.THREE.BoxGeometry(cube_size, cube_size, cube_size);
+    var mat = new MeshCat.THREE.MeshPhongMaterial({
+        color: 0xffffff,
+        side: 2,
+        transparent: true,
+        opacity: 0.5
+    });
+    var mesh = new MeshCat.THREE.InstancedMesh(geo, mat, grid_size);
+
+    // Space the cube instances into a uniform grid, applying white color
+    // to each.
+    const white = new MeshCat.THREE.Color(0xffffff);
+
+    const mat_size = 16; // Size of a general transformation matrix.
+    let instanceMatrixArray = new Float32Array(mat_size * grid_size);
+    let matrix = new MeshCat.THREE.Matrix4();
+
+    for (let z = 0; z < grid_dim; ++z) {
+        for (let y = 0; y < grid_dim; ++y) {
+            for (let x = 0; x < grid_dim; ++x) {
+                let index = 9 * z + 3 * y + x;
+
+                matrix.makeTranslation(default_offset * x, default_offset * y, default_offset * z);
+
+                mesh.setMatrixAt(index, matrix);
+                mesh.setColorAt(index, white);
+
+                instanceMatrixArray.set(matrix.elements.slice(), index * mat_size);
+
             }
-        });
+        }
+    }
 
-        // Set InstancedMesh properties.
-        // Here, we are updating the colors of the cubes.
+    // Create the 3D object in the MeshCat scene tree.
+    viewer.handle_command({
+        type: "set_object",
+        path: "/meshcat/instanced_cubes",
+        object: mesh.toJSON()
+    });
+
+    // The following two variables are Float32Arrays storing the color for
+    // each box instance to toggle between. They will be used to set the
+    // `instanceColor.array` property of our `instanced_cubes` object.
+
+    // Array of all white:
+    var white_array = new Float32Array(
+        Array(grid_size)
+            .fill([1, 1, 1])
+            .flat()
+    );
+
+    // Array of red for the z = 0 slide, green for the z = offset slice, and
+    // blue for the z = 2*offset slice.
+    var color_array = new Float32Array(
+        Array(slice_size)
+            .fill([1, 0, 0])
+            .concat(
+                Array(slice_size)
+                    .fill([0, 1, 0])
+            )
+            .concat(
+                Array(slice_size)
+                    .fill([0, 0, 1])
+            )
+            .flat()
+    );
+
+    // Button callback to toggle the color of the grid.
+    var toggle_color = () => {
+        color_on = !color_on;
+
+        // Set the relevant property of the InstancedMesh. Note, we do not
+        // have to replace the entire object, we can set the property of the
+        // object itself with "set_property".
         viewer.handle_command({
             type: "set_property",
             path: "/meshcat/instanced_cubes/<object>",
             property: "instanceColor.array",
-            value: new Float32Array([
-                    // z = 0 layer (red)
-                    1,0,0,
-                    1,0,0,
-                    1,0,0,
-                    1,0,0,
-                    1,0,0,
-                    1,0,0,
-                    1,0,0,
-                    1,0,0,
-                    1,0,0,
-                    // z = 0.3 layer (green)
-                    0,1,0,
-                    0,1,0,
-                    0,1,0,
-                    0,1,0,
-                    0,1,0,
-                    0,1,0,
-                    0,1,0,
-                    0,1,0,
-                    0,1,0,
-                    // z = 0.6 layer (blue)
-                    0,0,1,
-                    0,0,1,
-                    0,0,1,
-                    0,0,1,
-                    0,0,1,
-                    0,0,1,
-                    0,0,1,
-                    0,0,1,
-                    0,0,1
-            ])
+            value: color_on ? color_array : white_array
         });
+        // THREE.js needs to be informed that the property has been updated
+        // in order of update the instanced materials.
+        viewer.handle_command({
+            type: "set_property",
+            path: "/meshcat/instanced_cubes/<object>",
+            property: "instanceColor.needsUpdate",
+            value: true
+        });
+    };
+
+    // Bind our callback to a new button.
+    viewer.set_control("ToggleColor", toggle_color, color_on);
+
+    var offset_callback = (offset) => {
+
+        for (let z = 0; z < grid_dim; ++z) {
+            for (let y = 0; y < grid_dim; ++y) {
+                for (let x = 0; x < grid_dim; ++x) {
+                    let index = 9 * z + 3 * y + x;
+                    matrix.makeTranslation(offset * x, offset * y, offset * z);
+                    instanceMatrixArray.set(matrix.elements.slice(), index * mat_size);
+                }
+            }
+        }
+
+        // Set the relevant property of the InstancedMesh. Note, we do not
+        // have to replace the entire object, we can set the property of the
+        // object itself with "set_property".
+        viewer.handle_command({
+            type: "set_property",
+            path: "/meshcat/instanced_cubes/<object>",
+            property: "instanceMatrix.array",
+            value: instanceMatrixArray
+        });
+        // THREE.js needs to be informed that the property has been updated
+        // in order of update the poses of the instances.
+        viewer.handle_command({
+            type: "set_property",
+            path: "/meshcat/instanced_cubes/<object>",
+            property: "instanceMatrix.needsUpdate",
+            value: true
+        });
+    };
+
+    // Bind our callback to a new button.
+    viewer.set_control("Offset", offset_callback, value = default_offset, min = cube_size,
+        max = 1, step = 0.01, keycode1 = "ArrowLeft", keycode2 = "ArrowRight");
+
+    // Any client using the WebSocket API can send `set_object` commands for any
+    // valid object in the JSON Object Scene format 4:
+    //   https://github.com/mrdoob/three.js/wiki/JSON-Object-Scene-format-4
+    // Docs there and at the main THREE.js docs (https://threejs.org/docs/) can
+    // be quite limited. You can always construct the object you want with the
+    // THREE.js javascript API and then inspect the format with .toJSON() to
+    // implement the proper format. For instance, to see the JSON representation
+    // of the InstancedMesh and one of the `set_property` commands used in this
+    // example, read the console output of the following functions:
+    console.log(JSON.stringify(mesh.toJSON(), null, 2));
+    console.log(JSON.stringify({
+            type: "set_property",
+            path: "/meshcat/instanced_cubes/<object>",
+            property: "instanceMatrix.array",
+            value: instanceMatrixArray
+        }, null, 2));
+    console.log(JSON.stringify({
+            type: "set_property",
+            path: "/meshcat/instanced_cubes/<object>",
+            property: "instanceMatrix.needsUpdate",
+            value: true
+        }
+    ), null, 2);
 
     </script>
 
